@@ -10,7 +10,7 @@
 
 	<groupId>org.bahmni.module</groupId>
 	<artifactId>fhir2Extension</artifactId>
-	<version>2.0.0</version>
+	<version>2.0.0-nmhs-ipd001a.1</version>
   <packaging>pom</packaging>
 	<name>FHIR2 module extensions</name>
 	<description>FHIR2 module extensions</description>
@@ -39,7 +39,7 @@
 
     <properties>
 			<openmrsPlatformVersion>2.6.15</openmrsPlatformVersion>
-			<openmrs.fhir2.version>2.5.0</openmrs.fhir2.version>
+			<openmrs.fhir2.version>2.5.1</openmrs.fhir2.version>
 			<web.services.version>2.49.0</web.services.version>
 			<junitVersion>4.13.1</junitVersion>
 			<lombokVersion>1.18.32</lombokVersion>

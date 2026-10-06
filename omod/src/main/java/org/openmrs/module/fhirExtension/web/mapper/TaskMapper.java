@@ -12,6 +12,7 @@ import org.openmrs.module.fhir2.model.FhirReference;
 import org.openmrs.module.fhir2.model.FhirTask;
 import org.openmrs.module.fhirExtension.model.FhirTaskRequestedPeriod;
 import org.openmrs.module.fhirExtension.model.Task;
+import org.openmrs.module.fhirExtension.web.contract.TaskFhirReference;
 import org.openmrs.module.fhirExtension.web.contract.TaskRequest;
 import org.openmrs.module.fhirExtension.web.contract.TaskResponse;
 import org.openmrs.module.fhirExtension.web.contract.TaskUpdateRequest;
@@ -25,7 +26,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
@@ -86,6 +89,24 @@ public class TaskMapper {
 			task.setFhirTaskRequestedPeriod(fhirTaskRequestedPeriod);
 		}
 		
+		if (taskRequest.getFocus() != null) {
+			FhirReference focusReference = new FhirReference();
+			focusReference.setType(taskRequest.getFocus().getType());
+			focusReference.setReference(taskRequest.getFocus().getReference());
+			fhirTask.setFocusReference(focusReference);
+		}
+		
+		if (taskRequest.getBasedOn() != null) {
+			FhirReference basedOnReference = new FhirReference();
+			basedOnReference.setType(taskRequest.getBasedOn().getType());
+			basedOnReference.setReference(taskRequest.getBasedOn().getReference());
+			Set<FhirReference> basedOnReferences = fhirTask.getBasedOnReferences() != null
+			        ? fhirTask.getBasedOnReferences()
+			        : new HashSet<>();
+			basedOnReferences.add(basedOnReference);
+			fhirTask.setBasedOnReferences(basedOnReferences);
+		}
+		
 		if (taskRequest.getIsSystemGeneratedTask()) {
 			fhirTask.setCreator(Context.getUserService().getUserByUuid(Daemon.getDaemonUserUuid()));
 		}
@@ -107,6 +128,19 @@ public class TaskMapper {
 		response.setExecutionStartTime(task.getFhirTask().getExecutionStartTime());
 		response.setExecutionEndTime(task.getFhirTask().getExecutionEndTime());
 		response.setComment(task.getFhirTask().getComment());
+		if (task.getFhirTask().getFocusReference() != null) {
+			TaskFhirReference focus = new TaskFhirReference();
+			focus.setReference(task.getFhirTask().getFocusReference().getReference());
+			focus.setType(task.getFhirTask().getFocusReference().getType());
+			response.setFocus(focus);
+		}
+		if (task.getFhirTask().getBasedOnReferences() != null && !task.getFhirTask().getBasedOnReferences().isEmpty()) {
+			FhirReference basedOnReference = task.getFhirTask().getBasedOnReferences().iterator().next();
+			TaskFhirReference basedOn = new TaskFhirReference();
+			basedOn.setReference(basedOnReference.getReference());
+			basedOn.setType(basedOnReference.getType());
+			response.setBasedOn(basedOn);
+		}
 		return response;
 	}
 	

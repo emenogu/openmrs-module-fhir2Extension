@@ -38,4 +38,8 @@ public class TaskResponse {
 	private Date executionEndTime;
 	
 	private String comment;
+	
+	private TaskFhirReference focus;
+	
+	private TaskFhirReference basedOn;
 }
