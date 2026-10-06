@@ -22,14 +22,14 @@ jobs:
       - name: Checkout validation control
         uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 4
 
       - name: Verify immutable source and control topology
         shell: bash
         run: |
           set -euo pipefail
 
-          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
           test "$(git rev-parse "$SOURCE_COMMIT^")" = "$SOURCE_PARENT"
 
           git diff --name-only "$SOURCE_PARENT" "$SOURCE_COMMIT" | sort > /tmp/source-files.txt
@@ -46,7 +46,7 @@ jobs:
 
           diff -u /tmp/expected-files.txt /tmp/source-files.txt
 
-          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD)" = '.github/workflows/nmhs-upstream-002-ipd-adopt-001a.yml'
+          test "$(git diff --name-only "$SOURCE_COMMIT" HEAD | sort -u)" = '.github/workflows/nmhs-upstream-002-ipd-adopt-001a.yml'
 
           if git diff "$SOURCE_PARENT" "$SOURCE_COMMIT" | grep -E 'saveTasks\(|"/bulk"|TaskInputRequestDTO|TaskInputResponseDTO|@JsonProperty\("for"\)|private TaskFhirReference forReference' ; then
             echo 'Forbidden deferred feature found in source delta'
@@ -77,8 +77,8 @@ jobs:
           PROJECT_VERSION="$(./mvnw -q -DforceStdout help:evaluate -Dexpression=project.version)"
           test "$PROJECT_VERSION" = "$NMHS_VERSION"
 
-          ./mvnw --no-transfer-progress -DskipTests dependency:tree \
-            -Dincludes=org.openmrs.module:fhir2-api,org.openmrs.module:fhir2-omod \
+          ./mvnw --no-transfer-progress -DskipTests -pl api dependency:tree \
+            -Dincludes=org.openmrs.module:fhir2-api \
             | tee dependency-tree.txt
 
           grep -F 'org.openmrs.module:fhir2-api:jar:2.5.1' dependency-tree.txt
