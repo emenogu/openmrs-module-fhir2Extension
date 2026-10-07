@@ -1,0 +1,65 @@
+name: NMHS UPSTREAM-002 BUNDLE-1 fhir2Extension validation
+
+on:
+  push:
+    branches:
+      - upstream-002-bundle1-ipd-complete-adoption-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Verify immutable Bundle-1 coordinates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)" = "2.0.0-nmhs-ipdbundle1.1"
+          test "$(./mvnw help:evaluate -Dexpression=openmrs.fhir2.version -q -DforceStdout)" = "2.5.1"
+          ! grep -R --line-number --fixed-strings '2.2.0-SNAPSHOT' pom.xml api/pom.xml omod/pom.xml
+
+      - name: Verify combined Task contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'TaskFhirReference focus' omod/src/main/java/org/openmrs/module/fhirExtension/web/contract/TaskRequest.java
+          grep -F 'TaskFhirReference basedOn' omod/src/main/java/org/openmrs/module/fhirExtension/web/contract/TaskRequest.java
+          grep -F 'List<TaskInputRequestDTO> input' omod/src/main/java/org/openmrs/module/fhirExtension/web/contract/TaskRequest.java
+          grep -F 'List<TaskInputResponseDTO> input' omod/src/main/java/org/openmrs/module/fhirExtension/web/contract/TaskResponse.java
+          grep -F 'setFocusReference' omod/src/main/java/org/openmrs/module/fhirExtension/web/mapper/TaskMapper.java
+          grep -F 'setBasedOnReferences' omod/src/main/java/org/openmrs/module/fhirExtension/web/mapper/TaskMapper.java
+          grep -F 'setInput' omod/src/main/java/org/openmrs/module/fhirExtension/web/mapper/TaskMapper.java
+
+      - name: Build and test
+        run: ./mvnw --no-transfer-progress clean test package
+
+      - name: Capture OMOD SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          OMOD="$(find omod/target -maxdepth 1 -type f -name '*.omod' | head -1)"
+          test -n "$OMOD"
+          sha256sum "$OMOD"
+          cp "$OMOD" fhir2Extension-bundle1.omod
+          sha256sum fhir2Extension-bundle1.omod > fhir2Extension-bundle1.omod.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fhir2Extension-bundle1
+          path: |
+            fhir2Extension-bundle1.omod
+            fhir2Extension-bundle1.omod.sha256
+          if-no-files-found: error
