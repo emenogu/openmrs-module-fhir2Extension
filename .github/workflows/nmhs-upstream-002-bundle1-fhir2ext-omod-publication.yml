@@ -1,0 +1,103 @@
+name: NMHS UPSTREAM-002 BUNDLE-1 fhir2Extension OMOD publication
+
+on:
+  push:
+    branches:
+      - upstream-002-bundle1-fhir2ext-omod-publication-v1
+    paths:
+      - .github/workflows/nmhs-upstream-002-bundle1-fhir2ext-omod-publication.yml
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    if: github.event.head_commit.message == 'UPSTREAM-002 BUNDLE-1 stage fhir2Extension OMOD publication'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_COMMIT: 45fcdd7c2516cd8c9ea0335cc1637dda67c6e501
+      VALIDATION_RUN_ID: '37589272398'
+      OMOD_SHA256: 1396128da909507f24f7ba2b7398c33db798b0a64ab137949a37d155fb7207f2
+      IMAGE_REPO: ghcr.io/emenogu/nmhs-fhir2extension-bundle1-omod
+      IMAGE_TAG: 2.0.0-nmhs-ipdbundle1.1
+    steps:
+      - name: Checkout publication control
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download exact accepted OMOD artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fhir2Extension-bundle1
+          path: accepted
+          run-id: ${{ env.VALIDATION_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify accepted bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f accepted/fhir2Extension-bundle1.omod
+          actual="$(sha256sum accepted/fhir2Extension-bundle1.omod | awk '{print $1}')"
+          test "$actual" = "$OMOD_SHA256"
+          grep -F "$OMOD_SHA256" accepted/fhir2Extension-bundle1.omod.sha256
+          mkdir image
+          cp accepted/fhir2Extension-bundle1.omod image/fhir2Extension-2.0.0-nmhs-ipdbundle1.1.omod
+          cat > image/Dockerfile <<'EOF'
+          FROM alpine:3.20
+          COPY fhir2Extension-2.0.0-nmhs-ipdbundle1.1.omod /bundle/fhir2Extension-2.0.0-nmhs-ipdbundle1.1.omod
+          EOF
+          echo ACCEPTED_OMOD_BYTES=PASS
+
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Publish immutable OMOD carrier
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: image
+          file: image/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Pull back and verify carrier
+        shell: bash
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          ref="$IMAGE_REPO@$DIGEST"
+          docker pull --platform linux/amd64 "$ref"
+          actual="$(docker run --rm --entrypoint sha256sum "$ref" /bundle/fhir2Extension-2.0.0-nmhs-ipdbundle1.1.omod | awk '{print $1}')"
+          test "$actual" = "$OMOD_SHA256"
+          {
+            echo "COMPONENT=fhir2Extension-omod-carrier"
+            echo "SOURCE_COMMIT=$SOURCE_COMMIT"
+            echo "VALIDATION_RUN_ID=$VALIDATION_RUN_ID"
+            echo "OMOD_SHA256=$OMOD_SHA256"
+            echo "IMAGE_TAG=$IMAGE_REPO:$IMAGE_TAG"
+            echo "IMAGE_DIGEST=$DIGEST"
+            echo "IMAGE_REF=$ref"
+          } | tee fhir2ext-omod.provenance
+          echo FHIR2EXT_OMOD_PUBLICATION=PASS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle1-fhir2ext-omod-publication-provenance
+          path: fhir2ext-omod.provenance
+          if-no-files-found: error
